@@ -41,4 +41,10 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) and the ADRs in `docs/adr/` for the bound
 go test ./...
 ```
 
-The repository pins Go 1.24. A containerized test command will be added before the first public release.
+The repository pins Go 1.25. A containerized test command will be added before the first public release.
+
+## Local database
+
+The next increment adds Postgres as the durable source of truth. Start it with `docker compose up -d postgres`; the schema lives in `internal/database/migrations/0001_init.sql`. The database is not yet connected to a public API or worker process.
+
+After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_URL=postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable go test -tags=integration -race ./...`.
