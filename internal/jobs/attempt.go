@@ -42,7 +42,10 @@ func (s *Store) RecordAttempt(ctx context.Context, attempt Attempt, now, retryAt
 		return false, err
 	}
 	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `INSERT INTO attempts (id,job_id,idempotency_key,outcome,provider_receipt) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (job_id,idempotency_key) DO NOTHING`, attempt.ID, attempt.JobID, attempt.IdempotencyKey, attempt.Outcome, attempt.Receipt)
+	// A provider idempotency key is intentionally stable across retries of one job.
+	// Attempt identity is local and unique per execution, so every delivery try stays
+	// inspectable without causing the provider to perform the action twice.
+	tag, err := tx.Exec(ctx, `INSERT INTO attempts (id,job_id,idempotency_key,outcome,provider_receipt) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`, attempt.ID, attempt.JobID, attempt.IdempotencyKey, attempt.Outcome, attempt.Receipt)
 	if err != nil {
 		return false, fmt.Errorf("insert attempt: %w", err)
 	}

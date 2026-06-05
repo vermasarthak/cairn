@@ -6,7 +6,7 @@ Cairn is being built for a narrow, difficult problem: deciding whether a user-fa
 
 ## Status
 
-`v0.0.1` is the deterministic domain core. It is not a server, scheduler, queue, or production-ready delivery system yet.
+`v0.0.1` is a local, deterministic vertical slice. It is not a public server, scheduler, or production-ready delivery system yet.
 
 Implemented today:
 
@@ -14,12 +14,14 @@ Implemented today:
 - injectable/virtual time for deterministic testing;
 - concurrency-safe in-memory reservation uniqueness;
 - legal reservation state transitions; and
-- tests for time-zone boundaries, duplicate reservations, and concurrent planners.
+- Postgres-backed reservation, outbox, lease, and attempt state;
+- deterministic retry scheduling and reconciliation transitions; and
+- integration proofs for concurrent planners, lease expiry, retries, and ambiguous provider outcomes.
 
 ## Non-goals for this increment
 
-- no provider integration;
-- no database or queue;
+- no real provider integration;
+- no public API or queue broker;
 - no claim of exactly-once external delivery;
 - no AI-generated action authority; and
 - no public deployment.
@@ -45,6 +47,6 @@ The repository pins Go 1.25. A containerized test command will be added before t
 
 ## Local database
 
-The next increment adds Postgres as the durable source of truth. Start it with `docker compose up -d postgres`; the schema lives in `internal/database/migrations/0001_init.sql`. The database is not yet connected to a public API or worker process.
+Postgres is the durable source of truth. Start it with `docker compose up -d postgres`, then apply the migrations in `internal/database/migrations/` in lexical order. A local worker can claim one job, call the deterministic provider fake, write an attempt receipt, and either succeed, schedule a retry, or move an ambiguous result to reconciliation.
 
 After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_URL=postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable go test -tags=integration -race ./...`.
