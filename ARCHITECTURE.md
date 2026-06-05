@@ -9,7 +9,7 @@ event -> candidate -> evaluate policy -> reserve -> durable job -> claim lease
       -> revalidate -> provider attempt -> receipt/reconcile -> audit record
 ```
 
-The current repository implements only the first four deterministic concepts. Postgres-backed durability, jobs, workers, provider adapters, and observability will be added in that order.
+The current repository implements policy evaluation, atomic reservation-to-job creation, lease-based claiming, retry scheduling, and an isolated reconciliation path using a deterministic provider fake. Public ingress, real provider adapters, and observability remain future work.
 
 ## Core invariants
 
@@ -21,13 +21,13 @@ The current repository implements only the first four deterministic concepts. Po
 
 ## Planned persistence model
 
-Postgres will hold canonical events, policy versions, candidates, reservations, jobs, attempts, provider receipts, and immutable audit events. A transactional outbox will bridge the database commit and worker scheduling boundary.
+Postgres holds reservations, jobs, attempts, reconciliation lookups, provider receipt placeholders, and immutable audit events. A transactional outbox bridges the reservation commit and worker scheduling boundary.
 
-The system will not claim exactly-once delivery. A worker may retry after an ambiguous provider timeout. Provider idempotency keys and reconciliation determine whether that retry can be made effectively once.
+The system will not claim exactly-once delivery. A retryable pre-acceptance failure is retried with the same provider idempotency key. An ambiguous timeout enters dedicated reconciliation and cannot be resent unless the provider explicitly reports the action absent.
 
 ## Planned concurrency model
 
-Planning creates a reservation in the same transaction that enforces the unique reservation key. Worker claiming will use time-bounded leases. A reaper will make expired leases eligible again. Every provider attempt will have an independent, immutable record.
+Planning creates a reservation in the same transaction that enforces the unique reservation key. Senders and reconcilers use separate time-bounded leases; an expired lease can be claimed again only by its own execution class. Every provider attempt and lookup has an independent, immutable record.
 
 ## Security boundary
 

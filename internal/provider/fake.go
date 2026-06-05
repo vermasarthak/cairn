@@ -8,10 +8,25 @@ import (
 )
 
 type Request struct{ JobID, IdempotencyKey string }
+type LookupRequest struct{ JobID, IdempotencyKey string }
 type Fake struct {
-	mu       sync.Mutex
-	Outcomes []jobs.Outcome
-	Requests []Request
+	mu                    sync.Mutex
+	Outcomes              []jobs.Outcome
+	ReconciliationResults []jobs.ReconciliationResult
+	Requests              []Request
+	Lookups               []LookupRequest
+}
+
+func (f *Fake) Lookup(_ context.Context, request LookupRequest) jobs.ReconciliationResult {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Lookups = append(f.Lookups, request)
+	if len(f.ReconciliationResults) == 0 {
+		return jobs.StillUnknown
+	}
+	result := f.ReconciliationResults[0]
+	f.ReconciliationResults = f.ReconciliationResults[1:]
+	return result
 }
 
 func (f *Fake) Send(_ context.Context, request Request) jobs.Outcome {

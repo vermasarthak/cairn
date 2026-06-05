@@ -15,7 +15,7 @@ Implemented today:
 - concurrency-safe in-memory reservation uniqueness;
 - legal reservation state transitions; and
 - Postgres-backed reservation, outbox, lease, and attempt state;
-- deterministic retry scheduling and reconciliation transitions; and
+- deterministic retry scheduling, provider-status reconciliation, and immutable receipt history; and
 - integration proofs for concurrent planners, lease expiry, retries, and ambiguous provider outcomes.
 
 ## Non-goals for this increment
@@ -47,6 +47,14 @@ The repository pins Go 1.25. A containerized test command will be added before t
 
 ## Local database
 
-Postgres is the durable source of truth. Start it with `docker compose up -d postgres`, then apply the migrations in `internal/database/migrations/` in lexical order. A local worker can claim one job, call the deterministic provider fake, write an attempt receipt, and either succeed, schedule a retry, or move an ambiguous result to reconciliation.
+Postgres is the durable source of truth. Start it with `docker compose up -d postgres`, then apply the migrations in `internal/database/migrations/` in lexical order:
+
+```bash
+for migration in internal/database/migrations/*.sql; do
+  docker compose exec -T postgres psql -U cairn -d cairn -v ON_ERROR_STOP=1 -f /dev/stdin < "$migration"
+done
+```
+
+A local worker can claim one job, call the deterministic provider fake, write an attempt receipt, and either succeed, schedule a retry, or move an ambiguous result to reconciliation.
 
 After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_URL=postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable go test -tags=integration -race ./...`.
