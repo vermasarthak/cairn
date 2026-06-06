@@ -21,7 +21,7 @@ The current repository implements policy evaluation, atomic reservation-to-job c
 
 ## Planned persistence model
 
-Postgres holds reservations, jobs, attempts, reconciliation lookups, provider receipt placeholders, and immutable audit events. A transactional outbox bridges the reservation commit and worker scheduling boundary.
+Postgres holds reservations, jobs, attempts, reconciliation lookups, provider receipt placeholders, and immutable audit events. A transactional outbox bridges the reservation commit and worker scheduling boundary. An embedded migration runner serializes schema changes with a Postgres advisory lock and stores a checksum for each applied migration.
 
 The system will not claim exactly-once delivery. A retryable pre-acceptance failure is retried with the same provider idempotency key. An ambiguous timeout enters dedicated reconciliation and cannot be resent unless the provider explicitly reports the action absent.
 

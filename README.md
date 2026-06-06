@@ -47,13 +47,13 @@ The repository pins Go 1.25. A containerized test command will be added before t
 
 ## Local database
 
-Postgres is the durable source of truth. Start it with `docker compose up -d postgres`, then apply the migrations in `internal/database/migrations/` in lexical order:
+Postgres is the durable source of truth. Start it with `docker compose up -d postgres`, then run the checksum-verified migrator:
 
 ```bash
-for migration in internal/database/migrations/*.sql; do
-  docker compose exec -T postgres psql -U cairn -d cairn -v ON_ERROR_STOP=1 -f /dev/stdin < "$migration"
-done
+DATABASE_URL='postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable' go run ./cmd/cairn-migrate
 ```
+
+The migrator refuses to guess about a database that has application tables but no recorded migration history. For a pre-migrator local development database, recreate the disposable Compose volume rather than baselining it blindly.
 
 A local worker can claim one job, call the deterministic provider fake, write an attempt receipt, and either succeed, schedule a retry, or move an ambiguous result to reconciliation.
 
