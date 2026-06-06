@@ -14,7 +14,7 @@ Implemented today:
 - injectable/virtual time for deterministic testing;
 - concurrency-safe in-memory reservation uniqueness;
 - legal reservation state transitions; and
-- Postgres-backed reservation, outbox, lease, and attempt state;
+- Postgres-backed reservation, outbox, token-fenced leases, and attempt state;
 - deterministic retry scheduling, provider-status reconciliation, and immutable receipt history; and
 - integration proofs for concurrent planners, lease expiry, retries, and ambiguous provider outcomes.
 

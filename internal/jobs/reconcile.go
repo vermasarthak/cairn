@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -21,16 +22,18 @@ const (
 )
 
 type Reconciliation struct {
-	ID      string
-	JobID   string
-	Result  ReconciliationResult
-	Receipt json.RawMessage
+	ID         string
+	JobID      string
+	LeaseToken string
+	Result     ReconciliationResult
+	Receipt    json.RawMessage
 }
 
 // ClaimNextReconciliation leases an ambiguous job without making it eligible
 // for the normal sender. Expired reconciliation leases are safe to reclaim.
 func (s *Store) ClaimNextReconciliation(ctx context.Context, now time.Time, lease time.Duration) (Job, bool, error) {
 	var job Job
+	leaseToken := uuid.NewString()
 	err := s.pool.QueryRow(ctx, `
 WITH candidate AS (
   SELECT id FROM jobs
@@ -39,9 +42,9 @@ WITH candidate AS (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-UPDATE jobs SET state = 'reconciling', lease_until = $2, updated_at = $1
+UPDATE jobs SET state = 'reconciling', lease_until = $2, lease_token = $3, updated_at = $1
 WHERE id = (SELECT id FROM candidate)
-RETURNING id::text, tenant_id, lease_until`, now.UTC(), now.UTC().Add(lease)).Scan(&job.ID, &job.TenantID, &job.LeaseUntil)
+RETURNING id::text, tenant_id, lease_token::text, lease_until`, now.UTC(), now.UTC().Add(lease), leaseToken).Scan(&job.ID, &job.TenantID, &job.LeaseToken, &job.LeaseUntil)
 	if err == nil {
 		return job, true, nil
 	}
@@ -55,8 +58,8 @@ RETURNING id::text, tenant_id, lease_until`, now.UTC(), now.UTC().Add(lease)).Sc
 // resulting job transition atomically. Unknown status remains reconciliation
 // work; it cannot accidentally return to ordinary delivery.
 func (s *Store) RecordReconciliation(ctx context.Context, reconciliation Reconciliation, now time.Time) (bool, error) {
-	if reconciliation.ID == "" || reconciliation.JobID == "" {
-		return false, fmt.Errorf("reconciliation id and job id are required")
+	if reconciliation.ID == "" || reconciliation.JobID == "" || reconciliation.LeaseToken == "" {
+		return false, fmt.Errorf("reconciliation id, job id, and lease token are required")
 	}
 	if reconciliation.Result != Confirmed && reconciliation.Result != ReconciliationRejected && reconciliation.Result != Absent && reconciliation.Result != StillUnknown {
 		return false, fmt.Errorf("unsupported reconciliation result %q", reconciliation.Result)
@@ -89,12 +92,12 @@ func (s *Store) RecordReconciliation(ctx context.Context, reconciliation Reconci
 	case Absent:
 		next = "queued"
 	}
-	tag, err = tx.Exec(ctx, `UPDATE jobs SET state=$2, available_at=$3, lease_until=NULL, updated_at=$4 WHERE id=$1 AND state='reconciling'`, reconciliation.JobID, next, availableAt, now.UTC())
+	tag, err = tx.Exec(ctx, `UPDATE jobs SET state=$2, available_at=$3, lease_until=NULL, lease_token=NULL, updated_at=$4 WHERE id=$1 AND state='reconciling' AND lease_token=$5`, reconciliation.JobID, next, availableAt, now.UTC(), reconciliation.LeaseToken)
 	if err != nil {
 		return false, fmt.Errorf("transition reconciled job: %w", err)
 	}
 	if tag.RowsAffected() != 1 {
-		return false, fmt.Errorf("reconciling job %s was not available", reconciliation.JobID)
+		return false, fmt.Errorf("reconciling job %s is not owned by this worker", reconciliation.JobID)
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return false, err

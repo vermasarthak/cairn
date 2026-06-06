@@ -25,6 +25,6 @@ func (r Runner) RunOnce(ctx context.Context, now time.Time) (bool, error) {
 		return claimed, err
 	}
 	outcome := r.Provider.Send(ctx, provider.Request{JobID: job.ID, IdempotencyKey: job.ID})
-	_, err = r.Jobs.RecordAttempt(ctx, jobs.Attempt{ID: uuid.NewString(), JobID: job.ID, IdempotencyKey: job.ID, Outcome: outcome}, now, r.Retry.Next(now, 1))
+	_, err = r.Jobs.RecordAttempt(ctx, jobs.Attempt{ID: uuid.NewString(), JobID: job.ID, LeaseToken: job.LeaseToken, IdempotencyKey: job.ID, Outcome: outcome}, now, r.Retry.Next(now, 1))
 	return true, err
 }

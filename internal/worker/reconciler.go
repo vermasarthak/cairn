@@ -25,6 +25,6 @@ func (r Reconciler) RunOnce(ctx context.Context, now time.Time) (bool, error) {
 		return claimed, err
 	}
 	result := r.Provider.Lookup(ctx, provider.LookupRequest{JobID: job.ID, IdempotencyKey: job.ID})
-	_, err = r.Jobs.RecordReconciliation(ctx, jobs.Reconciliation{ID: uuid.NewString(), JobID: job.ID, Result: result}, now)
+	_, err = r.Jobs.RecordReconciliation(ctx, jobs.Reconciliation{ID: uuid.NewString(), JobID: job.ID, LeaseToken: job.LeaseToken, Result: result}, now)
 	return true, err
 }

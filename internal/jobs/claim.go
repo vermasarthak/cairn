@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -11,6 +12,7 @@ import (
 type Job struct {
 	ID         string
 	TenantID   string
+	LeaseToken string
 	LeaseUntil time.Time
 }
 
@@ -22,6 +24,7 @@ func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 // at-least-once execution: an expired lease may be claimed again.
 func (s *Store) ClaimNext(ctx context.Context, now time.Time, lease time.Duration) (Job, bool, error) {
 	var job Job
+	leaseToken := uuid.NewString()
 	err := s.pool.QueryRow(ctx, `
 WITH candidate AS (
   SELECT id FROM jobs
@@ -30,9 +33,9 @@ WITH candidate AS (
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
-UPDATE jobs SET state = 'claimed', lease_until = $2, updated_at = $1
+UPDATE jobs SET state = 'claimed', lease_until = $2, lease_token = $3, updated_at = $1
 WHERE id = (SELECT id FROM candidate)
-RETURNING id::text, tenant_id, lease_until`, now.UTC(), now.UTC().Add(lease)).Scan(&job.ID, &job.TenantID, &job.LeaseUntil)
+RETURNING id::text, tenant_id, lease_token::text, lease_until`, now.UTC(), now.UTC().Add(lease), leaseToken).Scan(&job.ID, &job.TenantID, &job.LeaseToken, &job.LeaseUntil)
 	if err == nil {
 		return job, true, nil
 	}

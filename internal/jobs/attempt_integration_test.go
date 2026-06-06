@@ -45,7 +45,7 @@ func TestUnknownAttemptRequiresReconciliation(t *testing.T) {
 	defer pool.Close()
 	job := claimedJob(t, pool)
 	now := time.Now().UTC()
-	stored, err := NewStore(pool).RecordAttempt(context.Background(), Attempt{ID: uuid.NewString(), JobID: job.ID, IdempotencyKey: "provider-key", Outcome: Unknown}, now, now)
+	stored, err := NewStore(pool).RecordAttempt(context.Background(), Attempt{ID: uuid.NewString(), JobID: job.ID, LeaseToken: job.LeaseToken, IdempotencyKey: "provider-key", Outcome: Unknown}, now, now)
 	if err != nil || !stored {
 		t.Fatalf("record: stored=%t err=%v", stored, err)
 	}
@@ -71,7 +71,7 @@ func TestDuplicateAttemptDoesNotCreateSecondReceipt(t *testing.T) {
 	job := claimedJob(t, pool)
 	store := NewStore(pool)
 	now := time.Now().UTC()
-	attempt := Attempt{ID: uuid.NewString(), JobID: job.ID, IdempotencyKey: "provider-key", Outcome: Accepted}
+	attempt := Attempt{ID: uuid.NewString(), JobID: job.ID, LeaseToken: job.LeaseToken, IdempotencyKey: "provider-key", Outcome: Accepted}
 	if ok, err := store.RecordAttempt(context.Background(), attempt, now, now); err != nil || !ok {
 		t.Fatalf("first record: %t %v", ok, err)
 	}
@@ -84,5 +84,36 @@ func TestDuplicateAttemptDoesNotCreateSecondReceipt(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("attempts=%d want 1", count)
+	}
+}
+
+func TestStaleLeaseOwnerCannotRecordAnAttempt(t *testing.T) {
+	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("CAIRN_TEST_DATABASE_URL is required")
+	}
+	pool, err := pgxpool.New(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	first := claimedJob(t, pool)
+	now := time.Now().UTC()
+	second, reclaimed, err := NewStore(pool).ClaimNext(context.Background(), now.Add(2*time.Minute), time.Minute)
+	if err != nil || !reclaimed || first.LeaseToken == second.LeaseToken {
+		t.Fatalf("reclaim: reclaimed=%t old=%s new=%s err=%v", reclaimed, first.LeaseToken, second.LeaseToken, err)
+	}
+	if _, err := NewStore(pool).RecordAttempt(context.Background(), Attempt{ID: uuid.NewString(), JobID: first.ID, LeaseToken: first.LeaseToken, IdempotencyKey: "provider-key", Outcome: Accepted}, now.Add(2*time.Minute), now); err == nil {
+		t.Fatal("stale worker recorded an attempt")
+	}
+	var count int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM attempts WHERE job_id=$1", first.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("stale attempt receipt persisted: %d", count)
+	}
+	if stored, err := NewStore(pool).RecordAttempt(context.Background(), Attempt{ID: uuid.NewString(), JobID: second.ID, LeaseToken: second.LeaseToken, IdempotencyKey: "provider-key", Outcome: Accepted}, now.Add(2*time.Minute), now); err != nil || !stored {
+		t.Fatalf("current worker record: stored=%t err=%v", stored, err)
 	}
 }

@@ -31,7 +31,7 @@ func reconciliationJob(t *testing.T, pool *pgxpool.Pool) (jobs.Job, time.Time) {
 	if err != nil || !claimed || job.ID != result.JobID {
 		t.Fatalf("claim: job=%s claimed=%t err=%v", job.ID, claimed, err)
 	}
-	if stored, err := jobs.NewStore(pool).RecordAttempt(ctx, jobs.Attempt{ID: uuid.NewString(), JobID: job.ID, IdempotencyKey: job.ID, Outcome: jobs.Unknown}, now, now); err != nil || !stored {
+	if stored, err := jobs.NewStore(pool).RecordAttempt(ctx, jobs.Attempt{ID: uuid.NewString(), JobID: job.ID, LeaseToken: job.LeaseToken, IdempotencyKey: job.ID, Outcome: jobs.Unknown}, now, now); err != nil || !stored {
 		t.Fatalf("unknown attempt: stored=%t err=%v", stored, err)
 	}
 	return job, now

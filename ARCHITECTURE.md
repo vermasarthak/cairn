@@ -17,6 +17,7 @@ The current repository implements policy evaluation, atomic reservation-to-job c
 2. A reservation key is unique for `(tenant, subject, policy, action, local-day)`.
 3. A policy decision records its policy version and evaluation instant.
 4. State transitions are explicit; an already delivered action cannot return to a runnable state.
+5. A claimed or reconciling worker must present its unique lease token to transition the job; a stale worker cannot commit after its lease has been reclaimed.
 5. Local-day caps use the subject's declared IANA time zone, never the worker's time zone.
 
 ## Planned persistence model
@@ -27,7 +28,7 @@ The system will not claim exactly-once delivery. A retryable pre-acceptance fail
 
 ## Planned concurrency model
 
-Planning creates a reservation in the same transaction that enforces the unique reservation key. Senders and reconcilers use separate time-bounded leases; an expired lease can be claimed again only by its own execution class. Every provider attempt and lookup has an independent, immutable record.
+Planning creates a reservation in the same transaction that enforces the unique reservation key. Senders and reconcilers use separate time-bounded, token-fenced leases; an expired lease can be claimed again only by its own execution class, and the previous owner can no longer transition it. Every provider attempt and lookup has an independent, immutable record.
 
 ## Security boundary
 
