@@ -6,7 +6,7 @@ Cairn is being built for a narrow, difficult problem: deciding whether a user-fa
 
 ## Status
 
-`v0.0.1` is a local, deterministic vertical slice. It is not a public server, scheduler, or production-ready delivery system yet.
+`v0.0.1` is a local, deterministic vertical slice. It includes an authenticated local ingress endpoint, but is not publicly deployed or production-ready.
 
 Implemented today:
 
@@ -16,12 +16,13 @@ Implemented today:
 - legal reservation state transitions; and
 - Postgres-backed reservation, outbox, token-fenced leases, and attempt state;
 - deterministic retry scheduling, provider-status reconciliation, and immutable receipt history; and
+- API-key-authenticated reservation ingress using server-owned policy definitions; and
 - integration proofs for concurrent planners, lease expiry, retries, and ambiguous provider outcomes.
 
 ## Non-goals for this increment
 
 - no real provider integration;
-- no public API or queue broker;
+- no public deployment or queue broker;
 - no claim of exactly-once external delivery;
 - no AI-generated action authority; and
 - no public deployment.

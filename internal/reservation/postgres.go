@@ -46,10 +46,14 @@ func (s *PostgresStore) ReserveAndEnqueue(ctx context.Context, decision policy.D
 		if err != nil {
 			return EnqueueResult{}, err
 		}
+		var jobID string
+		if err = tx.QueryRow(ctx, `SELECT id::text FROM jobs WHERE reservation_tenant_id=$1 AND reservation_subject_id=$2 AND reservation_policy_id=$3 AND reservation_action_key=$4 AND reservation_local_day=$5`, key.TenantID, key.SubjectID, key.PolicyID, key.ActionKey, day).Scan(&jobID); err != nil {
+			return EnqueueResult{}, fmt.Errorf("load existing job: %w", err)
+		}
 		if err = tx.Commit(ctx); err != nil {
 			return EnqueueResult{}, err
 		}
-		return EnqueueResult{Reservation: reservation}, nil
+		return EnqueueResult{Reservation: reservation, JobID: jobID}, nil
 	}
 	if err != nil {
 		return EnqueueResult{}, fmt.Errorf("insert reservation: %w", err)
