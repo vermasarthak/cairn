@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vermasarthak/cairn/internal/api"
+	"github.com/vermasarthak/cairn/internal/observability"
 	"github.com/vermasarthak/cairn/internal/policy"
 	"github.com/vermasarthak/cairn/internal/reservation"
 )
@@ -29,7 +31,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer pool.Close()
-	server := api.Server{Policies: policy.NewPostgresStore(pool), Reservations: reservation.NewPostgresStore(pool), TokenTenants: tokens}
+	server := api.Server{Policies: policy.NewPostgresStore(pool), Reservations: reservation.NewPostgresStore(pool), TokenTenants: tokens, Ready: pool.Ping, Metrics: observability.NewMetrics(), Logger: slog.New(slog.NewJSONHandler(os.Stdout, nil))}
 	httpServer := &http.Server{Addr: ":8080", Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("cairn API listening on %s", httpServer.Addr)
 	log.Fatal(httpServer.ListenAndServe())

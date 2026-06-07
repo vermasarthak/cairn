@@ -58,4 +58,6 @@ The migrator refuses to guess about a database that has application tables but n
 
 A local worker can claim one job, call the deterministic provider fake, write an attempt receipt, and either succeed, schedule a retry, or move an ambiguous result to reconciliation.
 
+The local API exposes `/healthz`, database-backed `/readyz`, and `/metrics`. Logs are structured JSON and intentionally omit API keys, request bodies, and subject IDs.
+
 After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_URL=postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable go test -tags=integration -race ./...`.
