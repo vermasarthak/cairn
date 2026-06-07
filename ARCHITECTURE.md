@@ -28,7 +28,7 @@ The system will not claim exactly-once delivery. A retryable pre-acceptance fail
 
 ## Planned concurrency model
 
-Planning creates a reservation in the same transaction that enforces the unique reservation key. Senders and reconcilers use separate time-bounded, token-fenced leases; an expired lease can be claimed again only by its own execution class, and the previous owner can no longer transition it. Every provider attempt and lookup has an independent, immutable record.
+Planning creates a reservation, job, audit event, and outbox event in one transaction. Outbox dispatchers lease unpublished events and only acknowledge after publisher acceptance; consumers must deduplicate event IDs because a crashed dispatcher can republish after lease expiry. Senders and reconcilers use separate time-bounded, token-fenced leases; an expired lease can be claimed again only by its own execution class, and the previous owner can no longer transition it. Every provider attempt and lookup has an independent, immutable record.
 
 ## Security boundary
 
