@@ -12,3 +12,13 @@ services:
       interval: 2s
       timeout: 3s
       retries: 15
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://cairn:cairn_dev_only@postgres:5432/cairn?sslmode=disable
+      CAIRN_API_KEYS: ${CAIRN_API_KEYS:-}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy

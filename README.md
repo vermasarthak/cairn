@@ -6,7 +6,7 @@ Cairn is being built for a narrow, difficult problem: deciding whether a user-fa
 
 ## Status
 
-`v0.0.1` is a local, deterministic vertical slice. It includes an authenticated local ingress endpoint, but is not publicly deployed or production-ready.
+`v0.1.0` is a local, deterministic delivery-runtime reference. It includes authenticated ingress, durable state, retries, reconciliation, and operational endpoints; it is not a hosted service.
 
 Implemented today:
 
@@ -17,6 +17,7 @@ Implemented today:
 - Postgres-backed reservation, outbox, token-fenced leases, and attempt state;
 - deterministic retry scheduling, provider-status reconciliation, and immutable receipt history; and
 - API-key-authenticated reservation ingress using server-owned policy definitions; and
+- a leased transactional outbox dispatcher plus health, readiness, metrics, and JSON logs.
 - integration proofs for concurrent planners, lease expiry, retries, and ambiguous provider outcomes.
 
 ## Non-goals for this increment
@@ -59,5 +60,25 @@ The migrator refuses to guess about a database that has application tables but n
 A local worker can claim one job, call the deterministic provider fake, write an attempt receipt, and either succeed, schedule a retry, or move an ambiguous result to reconciliation.
 
 The local API exposes `/healthz`, database-backed `/readyz`, and `/metrics`. Logs are structured JSON and intentionally omit API keys, request bodies, and subject IDs.
+
+## Local demo
+
+In separate terminals, after starting Postgres and running migrations:
+
+```bash
+DATABASE_URL='postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable' go run ./cmd/cairn-seed-demo
+DATABASE_URL='postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable' CAIRN_API_KEYS='demo=demo-local-only-secret' go run ./cmd/cairn-api
+```
+
+Then create a policy-governed action:
+
+```bash
+curl -i http://localhost:8080/v1/reservations \
+  -H 'Content-Type: application/json' \
+  -H 'X-Cairn-API-Key: demo-local-only-secret' \
+  --data '{"policy_id":"daily-check-in","subject":{"id":"user-1","time_zone":"UTC","consented":true},"action":{"key":"check-in"}}'
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md), [BENCHMARKS.md](BENCHMARKS.md), [SECURITY.md](SECURITY.md), and [LIMITATIONS.md](LIMITATIONS.md) before deploying any adaptation.
 
 After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_URL=postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable go test -tags=integration -race ./...`.
