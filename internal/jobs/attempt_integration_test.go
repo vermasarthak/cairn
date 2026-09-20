@@ -117,3 +117,72 @@ func TestStaleLeaseOwnerCannotRecordAnAttempt(t *testing.T) {
 		t.Fatalf("current worker record: stored=%t err=%v", stored, err)
 	}
 }
+
+// TestLeaseExpiryTriggersRetryScheduling verifies the full retry cycle:
+//  1. A job is claimed and immediately given a RetryableError outcome with a
+//     future retryAt timestamp — this transitions the job back to "queued"
+//     with available_at = retryAt.
+//  2. Calling ClaimNext before retryAt yields nothing (job is not yet due).
+//  3. Calling ClaimNext at or after retryAt re-claims the job — proving that
+//     lease expiry and retry scheduling work end-to-end.
+func TestLeaseExpiryTriggersRetryScheduling(t *testing.T) {
+	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("CAIRN_TEST_DATABASE_URL is required")
+	}
+	pool, err := pgxpool.New(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	job := claimedJob(t, pool)
+	store := NewStore(pool)
+	now := time.Now().UTC()
+	retryAt := now.Add(5 * time.Minute)
+
+	// Record a retryable failure — job should move back to "queued" with available_at = retryAt.
+	stored, err := store.RecordAttempt(context.Background(), Attempt{
+		ID:             uuid.NewString(),
+		JobID:          job.ID,
+		LeaseToken:     job.LeaseToken,
+		IdempotencyKey: "provider-key",
+		Outcome:        RetryableError,
+	}, now, retryAt)
+	if err != nil || !stored {
+		t.Fatalf("RecordAttempt: stored=%t err=%v", stored, err)
+	}
+
+	// Verify state is back to "queued" with the future available_at.
+	var state string
+	var availableAt time.Time
+	if err := pool.QueryRow(context.Background(),
+		"SELECT state, available_at FROM jobs WHERE id=$1", job.ID,
+	).Scan(&state, &availableAt); err != nil {
+		t.Fatal(err)
+	}
+	if state != "queued" {
+		t.Fatalf("state=%s want queued after RetryableError", state)
+	}
+	if !availableAt.Truncate(time.Second).Equal(retryAt.Truncate(time.Second)) {
+		t.Fatalf("available_at=%s want %s", availableAt, retryAt)
+	}
+
+	// ClaimNext before retryAt should yield nothing — job is not yet due.
+	_, ok, err := store.ClaimNext(context.Background(), now.Add(time.Second), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("claimed job before retryAt — scheduler fired too early")
+	}
+
+	// ClaimNext at retryAt should successfully re-claim the job.
+	retried, ok, err := store.ClaimNext(context.Background(), retryAt, time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("claim at retryAt: ok=%t err=%v", ok, err)
+	}
+	if retried.ID != job.ID {
+		t.Fatalf("reclaimed wrong job: got %s want %s", retried.ID, job.ID)
+	}
+}
