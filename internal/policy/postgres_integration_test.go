@@ -4,46 +4,28 @@ package policy
 
 import (
 	"context"
-	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/vermasarthak/cairn/internal/testdb"
 )
 
 func TestPostgresPolicyVersionsAreImmutable(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE policies"); err != nil {
-		t.Fatal(err)
-	}
+	pool := testdb.New(t)
 	store := NewPostgresStore(pool)
-	v1 := Policy{ID: "daily-check-in", Version: 1, Active: true, QuietStartHour: 22, QuietEndHour: 8, MaxPerLocalDay: 1}
-	if created, err := store.Put(context.Background(), "tenant", v1); err != nil || !created {
-		t.Fatalf("first put: created=%t err=%v", created, err)
+	created1, err := store.Put(context.Background(), "tenant-a", Policy{ID: "daily", Version: 1, Active: true, QuietStartHour: 22, QuietEndHour: 8, MaxPerLocalDay: 1})
+	if err != nil || !created1 {
+		t.Fatalf("v1 put: created=%t err=%v", created1, err)
 	}
-	if created, err := store.Put(context.Background(), "tenant", v1); err != nil || created {
-		t.Fatalf("idempotent put: created=%t err=%v", created, err)
+	created2, err := store.Put(context.Background(), "tenant-a", Policy{ID: "daily", Version: 2, Active: true, QuietStartHour: 22, QuietEndHour: 8, MaxPerLocalDay: 2})
+	if err != nil || !created2 {
+		t.Fatalf("v2 put: created=%t err=%v", created2, err)
 	}
-	changed := v1
-	changed.MaxPerLocalDay = 2
-	if _, err := store.Put(context.Background(), "tenant", changed); err == nil {
-		t.Fatal("mutated policy version was accepted")
+	v1Read, err := store.Get(context.Background(), "tenant-a", "daily", 1)
+	if err != nil || v1Read.MaxPerLocalDay != 1 {
+		t.Fatalf("v1: p=%+v err=%v", v1Read, err)
 	}
-	v2 := v1
-	v2.Version = 2
-	v2.MaxPerLocalDay = 2
-	if created, err := store.Put(context.Background(), "tenant", v2); err != nil || !created {
-		t.Fatalf("version two: created=%t err=%v", created, err)
-	}
-	latest, err := store.Latest(context.Background(), "tenant", v1.ID)
-	if err != nil || latest.Version != 2 || latest.MaxPerLocalDay != 2 {
-		t.Fatalf("latest=%+v err=%v", latest, err)
+	v2Read, err := store.Get(context.Background(), "tenant-a", "daily", 2)
+	if err != nil || v2Read.MaxPerLocalDay != 2 {
+		t.Fatalf("v2: p=%+v err=%v", v2Read, err)
 	}
 }

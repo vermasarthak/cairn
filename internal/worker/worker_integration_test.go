@@ -4,33 +4,22 @@ package worker
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"testing"
+	"time"
+
 	"github.com/vermasarthak/cairn/internal/jobs"
 	"github.com/vermasarthak/cairn/internal/policy"
 	"github.com/vermasarthak/cairn/internal/provider"
 	"github.com/vermasarthak/cairn/internal/reservation"
 	"github.com/vermasarthak/cairn/internal/retry"
-	"os"
-	"testing"
-	"time"
+	"github.com/vermasarthak/cairn/internal/testdb"
 )
 
 func TestRetryableProviderFailureSchedulesLaterRetry(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
+	pool := testdb.New(t)
 	ctx := context.Background()
-	if _, err := pool.Exec(ctx, "TRUNCATE audit_events, outbox, attempts, jobs, reservations CASCADE"); err != nil {
-		t.Fatal(err)
-	}
 	now := time.Now().UTC()
-	_, err = reservation.NewPostgresStore(pool).ReserveAndEnqueue(ctx, policy.Decision{Allowed: true, Reason: policy.Allowed, PolicyID: "daily", PolicyVersion: 1, LocalDay: "2026-09-23", EvaluatedAt: now}, policy.Subject{ID: "subject", TenantID: "tenant"}, policy.Action{Key: "check-in"})
+	_, err := reservation.NewPostgresStore(pool).ReserveAndEnqueue(ctx, policy.Decision{Allowed: true, Reason: policy.Allowed, PolicyID: "daily", PolicyVersion: 1, LocalDay: "2026-09-23", EvaluatedAt: now}, policy.Subject{ID: "subject", TenantID: "tenant"}, policy.Action{Key: "check-in"})
 	if err != nil {
 		t.Fatal(err)
 	}

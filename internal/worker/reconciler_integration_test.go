@@ -4,7 +4,6 @@ package worker
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -14,14 +13,12 @@ import (
 	"github.com/vermasarthak/cairn/internal/policy"
 	"github.com/vermasarthak/cairn/internal/provider"
 	"github.com/vermasarthak/cairn/internal/reservation"
+	"github.com/vermasarthak/cairn/internal/testdb"
 )
 
 func reconciliationJob(t *testing.T, pool *pgxpool.Pool) (jobs.Job, time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := pool.Exec(ctx, "TRUNCATE audit_events, outbox, reconciliations, attempts, jobs, reservations CASCADE"); err != nil {
-		t.Fatal(err)
-	}
 	now := time.Now().UTC()
 	result, err := reservation.NewPostgresStore(pool).ReserveAndEnqueue(ctx, policy.Decision{Allowed: true, Reason: policy.Allowed, PolicyID: "daily", PolicyVersion: 1, LocalDay: "2026-09-24", EvaluatedAt: now}, policy.Subject{ID: "subject", TenantID: "tenant"}, policy.Action{Key: "check-in"})
 	if err != nil {
@@ -38,15 +35,7 @@ func reconciliationJob(t *testing.T, pool *pgxpool.Pool) (jobs.Job, time.Time) {
 }
 
 func TestReconcilerConfirmsAmbiguousDeliveryWithoutResending(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
+	pool := testdb.New(t)
 	job, now := reconciliationJob(t, pool)
 	fake := &provider.Fake{ReconciliationResults: []jobs.ReconciliationResult{jobs.Confirmed}}
 	r := Reconciler{Jobs: jobs.NewStore(pool), Provider: fake, Lease: time.Minute}
@@ -67,15 +56,7 @@ func TestReconcilerConfirmsAmbiguousDeliveryWithoutResending(t *testing.T) {
 }
 
 func TestReconcilerLeavesUnknownStatusOutOfDeliveryQueue(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
+	pool := testdb.New(t)
 	_, now := reconciliationJob(t, pool)
 	r := Reconciler{Jobs: jobs.NewStore(pool), Provider: &provider.Fake{}, Lease: time.Minute}
 	if ran, err := r.RunOnce(context.Background(), now.Add(time.Second)); err != nil || !ran {

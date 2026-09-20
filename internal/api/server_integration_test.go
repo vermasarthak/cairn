@@ -7,28 +7,16 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vermasarthak/cairn/internal/policy"
 	"github.com/vermasarthak/cairn/internal/reservation"
+	"github.com/vermasarthak/cairn/internal/testdb"
 )
 
 func TestAuthenticatedIngressCreatesReservationJobAndOutbox(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE audit_events, outbox, reconciliations, attempts, jobs, reservations, policies CASCADE"); err != nil {
-		t.Fatal(err)
-	}
+	pool := testdb.New(t)
 	policies := policy.NewPostgresStore(pool)
 	if _, err := policies.Put(context.Background(), "tenant-a", policy.Policy{ID: "daily", Version: 1, Active: true, QuietStartHour: 22, QuietEndHour: 8, MaxPerLocalDay: 1}); err != nil {
 		t.Fatal(err)

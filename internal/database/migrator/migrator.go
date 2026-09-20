@@ -55,7 +55,7 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, all []migrations.Migration) 
 	rows.Close()
 	if len(applied) == 0 {
 		var existingTables int
-		if err := connection.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name <> 'schema_migrations'`).Scan(&existingTables); err != nil {
+		if err := connection.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name <> 'schema_migrations'`).Scan(&existingTables); err != nil {
 			return fmt.Errorf("inspect existing schema: %w", err)
 		}
 		if existingTables != 0 {

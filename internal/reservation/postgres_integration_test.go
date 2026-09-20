@@ -4,28 +4,16 @@ package reservation
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vermasarthak/cairn/internal/policy"
+	"github.com/vermasarthak/cairn/internal/testdb"
 )
 
 func TestPostgresReserveAllowsOneConcurrentPlanner(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE audit_events, outbox, jobs, reservations CASCADE"); err != nil {
-		t.Fatal(err)
-	}
+	pool := testdb.New(t)
 	store := NewPostgresStore(pool)
 	decision := policy.Decision{Allowed: true, Reason: policy.Allowed, PolicyID: "daily", PolicyVersion: 1, LocalDay: "2026-09-19", EvaluatedAt: time.Now().UTC()}
 	subject := policy.Subject{ID: "subject", TenantID: "tenant"}
@@ -66,25 +54,14 @@ func TestPostgresReserveAllowsOneConcurrentPlanner(t *testing.T) {
 }
 
 func TestPostgresReservationRollsBackWhenOutboxWriteFails(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE audit_events, outbox, jobs, reservations CASCADE"); err != nil {
-		t.Fatal(err)
-	}
+	pool := testdb.New(t)
 	if _, err := pool.Exec(context.Background(), "ALTER TABLE outbox ADD CONSTRAINT fail_outbox_write CHECK (false)"); err != nil {
 		t.Fatal(err)
 	}
 	defer pool.Exec(context.Background(), "ALTER TABLE outbox DROP CONSTRAINT fail_outbox_write")
 	store := NewPostgresStore(pool)
 	decision := policy.Decision{Allowed: true, Reason: policy.Allowed, PolicyID: "daily", PolicyVersion: 1, LocalDay: "2026-09-20", EvaluatedAt: time.Now().UTC()}
-	_, err = store.ReserveAndEnqueue(context.Background(), decision, policy.Subject{ID: "subject", TenantID: "tenant"}, policy.Action{Key: "check-in"})
+	_, err := store.ReserveAndEnqueue(context.Background(), decision, policy.Subject{ID: "subject", TenantID: "tenant"}, policy.Action{Key: "check-in"})
 	if err == nil {
 		t.Fatal("expected outbox constraint failure")
 	}
@@ -105,19 +82,7 @@ func TestPostgresReservationRollsBackWhenOutboxWriteFails(t *testing.T) {
 // This is the canonical proof that ReserveAndEnqueue is safe under concurrent
 // planners even when both callers evaluate the policy simultaneously.
 func TestConcurrentReservationUniqueness(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE audit_events, outbox, jobs, reservations CASCADE"); err != nil {
-		t.Fatal(err)
-	}
-
+	pool := testdb.New(t)
 	store := NewPostgresStore(pool)
 	decision := policy.Decision{
 		Allowed:       true,

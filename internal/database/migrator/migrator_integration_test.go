@@ -4,23 +4,67 @@ package migrator
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vermasarthak/cairn/internal/database/migrations"
 )
 
-func TestApplyAllIsRepeatableAndRecordsChecksums(t *testing.T) {
+var schemaSeq uint64
+
+func setupMigratorPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
 	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("CAIRN_TEST_DATABASE_URL is required")
 	}
-	pool, err := pgxpool.New(context.Background(), url)
+
+	seq := atomic.AddUint64(&schemaSeq, 1)
+	schemaName := fmt.Sprintf("migrator_schema_%d_%d_%d", os.Getpid(), time.Now().UnixNano()%100000, seq)
+
+	adminConfig, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	adminPool, err := pgxpool.NewWithConfig(context.Background(), adminConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	if _, err := adminPool.Exec(ctx, fmt.Sprintf("CREATE SCHEMA %q", schemaName)); err != nil {
+		adminPool.Close()
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		adminPool.Exec(context.Background(), fmt.Sprintf("DROP SCHEMA %q CASCADE", schemaName))
+		adminPool.Close()
+	})
+
+	testConfig, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testConfig.ConnConfig.RuntimeParams["search_path"] = schemaName
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), testConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pool.Close()
+	})
+
+	return pool
+}
+
+func TestApplyAllIsRepeatableAndRecordsChecksums(t *testing.T) {
+	pool := setupMigratorPool(t)
 	if err := ApplyAll(context.Background(), pool); err != nil {
 		t.Fatal(err)
 	}
@@ -41,24 +85,13 @@ func TestApplyAllIsRepeatableAndRecordsChecksums(t *testing.T) {
 }
 
 func TestApplyRejectsEditedHistory(t *testing.T) {
-	url := os.Getenv("CAIRN_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("CAIRN_TEST_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(context.Background(), url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	if _, err := pool.Exec(context.Background(), "CREATE TABLE IF NOT EXISTS migration_checksum_test (id integer)"); err != nil {
-		t.Fatal(err)
-	}
-	first := []migrations.Migration{{Version: "9998_checksum_test.sql", SQL: "INSERT INTO migration_checksum_test (id) VALUES (1);"}}
+	pool := setupMigratorPool(t)
+	first := []migrations.Migration{{Version: "9998_checksum_test.sql", SQL: "CREATE TABLE IF NOT EXISTS migration_checksum_test (id integer); INSERT INTO migration_checksum_test (id) VALUES (1);"}}
 	if err := Apply(context.Background(), pool, first); err != nil {
 		t.Fatal(err)
 	}
-	edited := []migrations.Migration{{Version: "9998_checksum_test.sql", SQL: "INSERT INTO migration_checksum_test (id) VALUES (2);"}}
+	edited := []migrations.Migration{{Version: "9998_checksum_test.sql", SQL: "CREATE TABLE IF NOT EXISTS migration_checksum_test (id integer); INSERT INTO migration_checksum_test (id) VALUES (2);"}}
 	if err := Apply(context.Background(), pool, edited); err == nil {
-		t.Fatal("edited migration was accepted")
+		t.Fatal("expected failure on edited migration checksum")
 	}
 }
