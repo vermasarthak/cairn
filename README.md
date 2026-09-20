@@ -1,5 +1,7 @@
 # Cairn
 
+[![CI](https://github.com/vermasarthak/cairn/actions/workflows/ci.yml/badge.svg)](https://github.com/vermasarthak/cairn/actions/workflows/ci.yml)
+
 **A durable, policy-aware delivery runtime for user-facing actions.**
 
 Cairn is being built for a narrow, difficult problem: deciding whether a user-facing action is still allowed, reserving it exactly once for a defined policy window, and making every later delivery attempt inspectable.
