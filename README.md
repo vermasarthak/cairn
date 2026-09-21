@@ -91,3 +91,5 @@ After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_U
 - **Benchmarking**: Validated tail-latency improvements across sample workloads.
 
 <!-- Architecture metric sync for cairn -->
+
+<!-- Benchmark metric log for cairn -->
