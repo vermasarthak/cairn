@@ -89,3 +89,5 @@ After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_U
 ## Recent Progress & Benchmarks (September 2026)
 - **Optimization**: Refactored core execution routines for higher throughput in `cairn`.
 - **Benchmarking**: Validated tail-latency improvements across sample workloads.
+
+<!-- Architecture metric sync for cairn -->
