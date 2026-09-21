@@ -93,3 +93,5 @@ After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_U
 <!-- Architecture metric sync for cairn -->
 
 <!-- Benchmark metric log for cairn -->
+
+<!-- Audit patch 2 -->
