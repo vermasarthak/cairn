@@ -84,22 +84,3 @@ curl -i http://localhost:8080/v1/reservations \
 See [ARCHITECTURE.md](ARCHITECTURE.md), [BENCHMARKS.md](BENCHMARKS.md), [SECURITY.md](SECURITY.md), and [LIMITATIONS.md](LIMITATIONS.md) before deploying any adaptation.
 
 After applying the migration, run the database proof with `CAIRN_TEST_DATABASE_URL=postgres://cairn:cairn_dev_only@localhost:54321/cairn?sslmode=disable go test -tags=integration -race ./...`.
-
-
-## Recent Progress & Benchmarks (September 2026)
-- **Optimization**: Refactored core execution routines for higher throughput in `cairn`.
-- **Benchmarking**: Validated tail-latency improvements across sample workloads.
-
-<!-- Architecture metric sync for cairn -->
-
-<!-- Benchmark metric log for cairn -->
-
-<!-- Audit patch 2 -->
-
-<!-- Audit patch 7 -->
-
-<!-- Audit patch 12 -->
-
-<!-- Audit patch 17 -->
-
-<!-- Audit patch 22 -->
