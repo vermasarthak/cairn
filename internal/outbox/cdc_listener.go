@@ -7,16 +7,17 @@ import (
 	"time"
 )
 
-// CDCEventHandler handles incoming change data capture events from Postgres logical replication.
-type CDCEventHandler interface {
+// SimulatedCDCEventHandler handles incoming change events in simulation / test harnesses.
+type SimulatedCDCEventHandler interface {
 	HandleCDCEvent(ctx context.Context, event Event) error
 }
 
-// CDCListener streams Postgres logical replication CDC outbox events with reconnect and offset management.
-type CDCListener struct {
+// SimulatedStreamListener provides a ticker-based event polling simulation for test harnesses.
+// Note: This is an in-memory simulation component for test harnesses, not a Postgres logical replication connection.
+type SimulatedStreamListener struct {
 	SlotName     string
 	Publication  string
-	Handler      CDCEventHandler
+	Handler      SimulatedCDCEventHandler
 	PollInterval time.Duration
 
 	mu      sync.Mutex
@@ -25,9 +26,15 @@ type CDCListener struct {
 	cancel  context.CancelFunc
 }
 
-// NewCDCListener initializes a new CDC listener for Postgres outbox CDC.
-func NewCDCListener(slotName, publication string, handler CDCEventHandler) *CDCListener {
-	return &CDCListener{
+// CDCEventHandler is an alias for SimulatedCDCEventHandler for test compatibility.
+type CDCEventHandler = SimulatedCDCEventHandler
+
+// CDCListener is an alias for SimulatedStreamListener for test compatibility.
+type CDCListener = SimulatedStreamListener
+
+// NewSimulatedStreamListener initializes a ticker-based test stream listener simulation.
+func NewSimulatedStreamListener(slotName, publication string, handler SimulatedCDCEventHandler) *SimulatedStreamListener {
+	return &SimulatedStreamListener{
 		SlotName:     slotName,
 		Publication:  publication,
 		Handler:      handler,
@@ -35,12 +42,17 @@ func NewCDCListener(slotName, publication string, handler CDCEventHandler) *CDCL
 	}
 }
 
-// Start begins listening for CDC outbox replication events in background.
-func (c *CDCListener) Start(ctx context.Context) error {
+// NewCDCListener initializes a test stream listener (simulation support).
+func NewCDCListener(slotName, publication string, handler CDCEventHandler) *CDCListener {
+	return NewSimulatedStreamListener(slotName, publication, handler)
+}
+
+// Start begins listening for simulated events in background.
+func (c *SimulatedStreamListener) Start(ctx context.Context) error {
 	c.mu.Lock()
 	if c.running {
 		c.mu.Unlock()
-		return fmt.Errorf("CDC listener is already running")
+		return fmt.Errorf("simulated stream listener is already running")
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	c.cancel = cancel
@@ -51,8 +63,8 @@ func (c *CDCListener) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop gracefully stops the CDC listener.
-func (c *CDCListener) Stop() {
+// Stop gracefully stops the simulated stream listener.
+func (c *SimulatedStreamListener) Stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.running {
@@ -64,21 +76,21 @@ func (c *CDCListener) Stop() {
 	c.running = false
 }
 
-// IsRunning returns whether the CDC listener is active.
-func (c *CDCListener) IsRunning() bool {
+// IsRunning returns whether the listener is active.
+func (c *SimulatedStreamListener) IsRunning() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.running
 }
 
-// Offset returns the current replication LSN offset.
-func (c *CDCListener) Offset() uint64 {
+// Offset returns the current simulated monotonic sequence offset (not a Postgres LSN).
+func (c *SimulatedStreamListener) Offset() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.offset
 }
 
-func (c *CDCListener) runLoop(ctx context.Context) {
+func (c *SimulatedStreamListener) runLoop(ctx context.Context) {
 	ticker := time.NewTicker(c.PollInterval)
 	defer ticker.Stop()
 

@@ -2,13 +2,27 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, audit/portfolio-hardening-v1 ]
   pull_request:
     branches: [ main ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cairn
+          POSTGRES_PASSWORD: cairn_dev_only
+          POSTGRES_DB: cairn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -16,8 +30,18 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
-      - name: Run Go Tests
-        run: |
-          go test -v ./...
+      - name: Go Vet
+        run: go vet ./...
+
+      - name: Unit Tests & Race Detection
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Postgres Integration Tests
+        env:
+          CAIRN_TEST_DATABASE_URL: 'postgres://cairn:cairn_dev_only@localhost:5432/cairn?sslmode=disable'
+        run: go test -v -tags=integration -race ./...
+
+      - name: Build Docker Image
+        run: docker build -t cairn:latest .

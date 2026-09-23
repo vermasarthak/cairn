@@ -18,7 +18,7 @@ func TestLSNReconciler(t *testing.T) {
 	}
 
 	gaps := rec.Gaps()
-	if len(gaps) != 1 || gaps[0].StartLSN != 102 || gaps[0].EndLSN != 104 {
+	if len(gaps) != 1 || gaps[0].StartOffset != 102 || gaps[0].EndOffset != 104 {
 		t.Fatalf("unexpected gaps: %+v", gaps)
 	}
 
