@@ -26,9 +26,8 @@ Implemented today:
 
 - no real provider integration;
 - no public deployment or queue broker;
-- no claim of exactly-once external delivery;
-- no AI-generated action authority; and
-- no public deployment.
+- no claim of exactly-once external delivery; and
+- no AI-generated action authority.
 
 ## Guarantees under development
 

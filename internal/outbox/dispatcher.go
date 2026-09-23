@@ -24,11 +24,13 @@ func (d Dispatcher) RunOnce(ctx context.Context, now time.Time) (bool, error) {
 		return claimed, err
 	}
 	if err := d.Publisher.Publish(ctx, event); err != nil {
-		d.Metrics.Inc("cairn_outbox_publish_failures_total")
+		if d.Metrics != nil {
+			d.Metrics.Inc("cairn_outbox_publish_failures_total")
+		}
 		return true, err
 	}
 	_, err = d.Store.MarkPublished(ctx, event, now)
-	if err == nil {
+	if err == nil && d.Metrics != nil {
 		d.Metrics.Inc("cairn_outbox_published_total")
 	}
 	return true, err

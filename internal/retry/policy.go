@@ -6,6 +6,12 @@ import "time"
 type Policy struct{ Base, Max time.Duration }
 
 func (p Policy) Next(now time.Time, attempt int) time.Time {
+	if attempt <= 0 {
+		attempt = 1
+	}
+	if attempt > 62 {
+		attempt = 62
+	}
 	if p.Base <= 0 {
 		p.Base = time.Second
 	}

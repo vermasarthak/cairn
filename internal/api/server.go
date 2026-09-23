@@ -123,7 +123,7 @@ func (s Server) tenantFor(given string) (string, bool) {
 		return "", false
 	}
 	for token, tenant := range s.TokenTenants {
-		if subtle.ConstantTimeCompare([]byte(given), []byte(token)) == 1 {
+		if len(given) == len(token) && subtle.ConstantTimeCompare([]byte(given), []byte(token)) == 1 {
 			return tenant, true
 		}
 	}
